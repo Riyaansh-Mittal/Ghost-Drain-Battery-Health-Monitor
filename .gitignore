@@ -1,11 +1,13 @@
+# ====================================================================
+# Built-in / IDE / Project Specific Ignores
+# ====================================================================
 *.iml
 .gradle
 /local.properties
-/.idea/caches
+/.idea/workspace.xml
 /.idea/libraries
 /.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
+/.idea/deploymentTargetDropDown.xml
 /.idea/assetWizardSettings.xml
 .DS_Store
 /build
@@ -13,3 +15,47 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# ====================================================================
+# Secrets & API Keys (Crucial Security)
+# ====================================================================
+# Firebase / Google Services configuration file
+**/google-services.json
+
+# Environment and keystore files containing sensitive variables
+*.env
+.env.*
+*.jks
+*.keystore
+secrets.properties
+
+# ====================================================================
+# Android Studio / IntelliJ Specific
+# ====================================================================
+# Gradle signing information (often contains passwords)
+.signing/
+
+# NDK / Native build artifacts
+obj/
+libs/
+
+# ====================================================================
+# Ad Networks & Mediation (AdMob / AppLovin)
+# ====================================================================
+# AppLovin Quality Service plugin temporary/cached files
+.applovin/
+applovin-quality-service.json
+
+# Google Mobile Ads (AdMob) / Firebase Crashlytics cached download tools
+**/.crashlytics/
+**/crashlytics.properties
+
+# ====================================================================
+# Multi-module / Root Level Ignores
+# ====================================================================
+# Ignore build directories across all sub-modules
+**/build/
+
+# Local history records from IDEs
+.idea/shelf/
+.idea/caches/
