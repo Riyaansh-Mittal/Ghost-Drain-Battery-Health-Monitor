@@ -4,23 +4,26 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
-import android.os.Build
 
 object BatteryStatsReader {
 
     data class BatterySnapshot(
         val levelPct: Int,
-        val currentNowMa: Float,      // mA (positive = charging on most OEMs)
+        val currentNowMa: Float,
         val voltageV: Float,
         val temperatureC: Float,
         val temperatureF: Float,
-        val wattage: Float,           // W = (|mA| × V) / 1000
-        val chargeCounterMah: Int,    // mAh remaining
+        val wattage: Float,
+        val chargeCounterMah: Int,
         val isCharging: Boolean,
         val isUsbCharging: Boolean,
         val isAcCharging: Boolean,
-        val chargeStatusLabel: String // "Fast charging 18W", "Slow 2W", "Discharging"
+        val chargeStatusLabel: String
     )
+
+    // ── Sliding window for counterfeit charger detection ──────────────
+    // NEW in Week 1 — everything above is unchanged from Week 0
+    private val currentWindow = ArrayDeque<Int>()  // 12 × 5s = 60s window
 
     fun readSnapshot(context: Context): BatterySnapshot {
         val bm = context.getSystemService(Context.BATTERY_SERVICE) as BatteryManager
@@ -76,5 +79,24 @@ object BatteryStatsReader {
             isAcCharging      = isAc,
             chargeStatusLabel = label
         )
+    }
+
+    // ── NEW: Call from service every 5s while charging ────────────────
+    // Returns true if std deviation > 200mA → counterfeit charger flag
+    fun addCurrentSample(microAmps: Long): Boolean {
+        val ma = Math.abs(microAmps / 1000).toInt()
+        if (currentWindow.size >= 12) currentWindow.removeFirst()
+        currentWindow.addLast(ma)
+        if (currentWindow.size < 6) return false
+
+        val mean = currentWindow.average()
+        val variance = currentWindow.map { (it - mean) * (it - mean) }.average()
+        val stdDev = Math.sqrt(variance)
+        return stdDev > 200.0
+    }
+
+    // Call this when charger is disconnected to reset the window
+    fun resetCurrentWindow() {
+        currentWindow.clear()
     }
 }
