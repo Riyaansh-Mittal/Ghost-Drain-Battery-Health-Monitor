@@ -12,12 +12,12 @@ pluginManagement {
     }
 }
 dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
-        maven { url 'https://jitpack.io' }
-        maven { url 'https://jitpack.io' }              // MPAndroidChart
-        maven { url 'https://artifacts.applovin.com/android' }  // AppLovin MAX
+        maven { url = uri("https://jitpack.io") }
+        maven { url = uri("https://artifacts.applovin.com/android") }
     }
 }
 

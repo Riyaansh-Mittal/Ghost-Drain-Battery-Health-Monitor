@@ -1,36 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="com.ghost.drain.battery.health.monitor">
+    xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- ─── Core Battery & Alarm Permissions ─── -->
+    <!-- Battery -->
+    <uses-permission android:name="android.permission.BATTERY_STATS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Foreground service -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!-- Notifications (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Exact alarms (Android 12+) -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
-    <!--
-        INTERNET permission is present in this base manifest for playstore + huawei flavors.
-        For the fdroid flavor, create:
-          app/src/fdroid/AndroidManifest.xml
-        and add these two lines inside <manifest> to strip INTERNET from that build:
-          <uses-permission android:name="android.permission.INTERNET"
-              tools:node="remove" />
-          <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"
-              tools:node="remove" />
-    -->
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Wake lock so alarm fires on screen off -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Usage stats for deep sleep detection -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
 
     <application
-        android:name=".BatteryApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
+        android:label="Battery Health Monitor"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.BatteryHealthMonitor">
@@ -45,38 +43,26 @@
             </intent-filter>
         </activity>
 
+        <!-- Foreground service -->
         <service
             android:name=".service.BatteryMonitorService"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="monitorBatteryHealth" />
+        </service>
 
+        <!-- Boot receiver — restart service after reboot -->
         <receiver
             android:name=".service.BootReceiver"
-            android:exported="true"
-            android:enabled="true">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
 
-        <!--
-            AdMob App ID — REPLACE with your real ID from AdMob console.
-            Format: ca-app-pub-XXXXXXXXXXXXXXXX~XXXXXXXXXX
-            AdMob is loaded THROUGH AppLovin MAX mediation, not directly.
-            This meta-data is still required by the AdMob SDK inside MAX.
-        -->
-        <meta-data
-            android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-XXXXXXXXXXXXXXXX~XXXXXXXXXX" />
-
-        <!--
-            AppLovin MAX SDK Key — REPLACE with your real key from MAX dashboard.
-            Get it at: https://dash.applovin.com/o/mediation/ad_units/
-        -->
-        <meta-data
-            android:name="applovin.sdk.key"
-            android:value="YOUR_APPLOVIN_SDK_KEY_HERE" />
-
     </application>
+
 </manifest>
