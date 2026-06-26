@@ -11,28 +11,52 @@ class BatteryRepository(private val dataSource: BatteryDataSource) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    // Rolling 10-minute buffer (120 readings × 5s = 600s = 10 min)
     private val _currentMaBuffer = MutableStateFlow<List<Int>>(emptyList())
     val currentMaBuffer: StateFlow<List<Int>> = _currentMaBuffer.asStateFlow()
 
-    // Shared live state — all screens collect this single flow
+    // --- Session-average charging speed (Part 4: in-memory, current session only) ---
+    // "Session" = from the moment isCharging flips false->true until it flips back to
+    // false (unplugged, or charger reports full). Resets on every new session.
+    // This mirrors AccuBattery's "average" stat, which is the mean of all current
+    // readings since plug-in, not a fixed trailing window like the charger-verdict
+    // smoothing buffer in BatteryDataSource (that's a separate, unrelated concern).
+    private var wasChargingLastTick = false
+    private var sessionMaSum = 0L
+    private var sessionMaCount = 0
+
+    private val _averageChargingMa = MutableStateFlow<Int?>(null)
+    val averageChargingMa: StateFlow<Int?> = _averageChargingMa.asStateFlow()
+
     val batteryState: StateFlow<BatteryState> = dataSource
-        .batteryStateFlow(intervalMs = 5_000L)
+        .batteryStateFlow()   // uses BatteryDataSource default of 1_000L
         .onEach { state ->
-            // Update rolling mA buffer
-            val updated = (_currentMaBuffer.value + state.currentMa).takeLast(120)
-            _currentMaBuffer.value = updated
+            _currentMaBuffer.value = (_currentMaBuffer.value + state.currentMa).takeLast(600)
+            updateSessionAverage(state)
         }
         .stateIn(
-            scope = scope,
-            started = SharingStarted.WhileSubscribed(5_000),
+            scope        = scope,
+            started      = SharingStarted.WhileSubscribed(3_000),
             initialValue = BatteryState()
         )
 
-    // Convenience: one-shot read (for service startup, etc.)
-    fun readOnce(): BatteryState = dataSource.readBatteryState()
+    private fun updateSessionAverage(state: BatteryState) {
+        if (state.isCharging && !wasChargingLastTick) {
+            // New charging session started — reset accumulator
+            sessionMaSum = 0L
+            sessionMaCount = 0
+        }
 
-    // Ghost drain: true if screen-off drain is above 3%/hour threshold
-    // Evaluated by the service — this flag is set in BatteryState.isGhostDrainDetected
-    // ViewModel reads batteryState.isGhostDrainDetected directly
+        if (state.isCharging) {
+            sessionMaSum += kotlin.math.abs(state.currentMa)
+            sessionMaCount += 1
+            _averageChargingMa.value = (sessionMaSum / sessionMaCount).toInt()
+        } else {
+            // Not charging — no average to show
+            _averageChargingMa.value = null
+        }
+
+        wasChargingLastTick = state.isCharging
+    }
+
+    fun readOnce(): BatteryState = dataSource.readBatteryState()
 }

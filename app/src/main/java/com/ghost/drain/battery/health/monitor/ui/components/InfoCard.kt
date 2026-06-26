@@ -24,7 +24,7 @@ import com.ghost.drain.battery.health.monitor.ui.theme.*
 fun InfoCard(
     modifier: Modifier = Modifier,
     backgroundColor: Color = SurfaceCard,
-    accentColor: Color? = GreenGlow,
+    accentColor: Color? = BorderStandard,
     borderWidth: Dp = 1.dp,
     cornerRadius: Dp = 16.dp,
     contentPadding: PaddingValues = PaddingValues(16.dp),
@@ -53,37 +53,16 @@ fun InfoCard(
 // ── Semantic convenience wrappers ─────────────────────────────────────────────
 
 @Composable
-fun GreenCard(
-    modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit
-) = InfoCard(
-    modifier = modifier,
-    backgroundColor = SurfaceCard,
-    accentColor = GreenGlow,
-    content = content
-)
+fun GreenCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) =
+    InfoCard(modifier = modifier, backgroundColor = SurfaceCard, accentColor = GreenPrimary, content = content)
 
 @Composable
-fun AmberCard(
-    modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit
-) = InfoCard(
-    modifier = modifier,
-    backgroundColor = SurfaceCardAlt,
-    accentColor = AmberBorder,
-    content = content
-)
+fun AmberCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) =
+    InfoCard(modifier = modifier, backgroundColor = SurfaceCardAlt, accentColor = AmberPrimary, content = content)
 
 @Composable
-fun RedCard(
-    modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit
-) = InfoCard(
-    modifier = modifier,
-    backgroundColor = SurfaceRed,
-    accentColor = RedBorder,
-    content = content
-)
+fun RedCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) =
+    InfoCard(modifier = modifier, backgroundColor = SurfaceCardAlt, accentColor = RedPrimary, content = content)
 
 @Composable
 fun NeutralCard(

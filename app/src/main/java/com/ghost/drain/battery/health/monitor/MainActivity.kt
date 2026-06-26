@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import com.ghost.drain.battery.health.monitor.ui.theme.Black
 import com.ghost.drain.battery.health.monitor.ui.theme.TextMuted
 import androidx.compose.ui.Modifier
+import com.ghost.drain.battery.health.monitor.ui.home.HomeScreen
 
 class MainActivity : ComponentActivity() {
 
@@ -78,21 +79,6 @@ private fun AppNavHost(initialOnboardingDone: Boolean) {
         )
     } else {
         // Part 4: HomeScreen goes here
-        HomePlaceholder()
-    }
-}
-
-@Composable
-private fun HomePlaceholder() {
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color    = Black
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text  = "Home screen coming in Part 4",
-                color = TextMuted
-            )
-        }
+        HomeScreen()
     }
 }

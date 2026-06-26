@@ -1,6 +1,7 @@
 package com.ghost.drain.battery.health.monitor.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,15 +25,16 @@ import com.ghost.drain.battery.health.monitor.ui.theme.*
  */
 @Composable
 fun AlarmToggleCard(
-    title: String,           // "Unplug alarm at 80%"
-    subtitle: String,        // "Rings every 60s until unplugged"
+    title: String,
+    subtitle: String,
     isEnabled: Boolean,
     onToggle: (Boolean) -> Unit,
     onCardClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val borderColor = if (isEnabled) GreenGlow else Color(0xFF333333)
-    val backgroundColor = if (isEnabled) SurfaceCard else Surface
+    // New logic: Use vibrant neon colors when enabled
+    val borderColor = if (isEnabled) GreenPrimary else Color(0xFF1F2937) // Modern dark grey
+    val backgroundColor = if (isEnabled) SurfaceCard else Color(0xFF0D0F12)
 
     Card(
         modifier = modifier
@@ -47,21 +49,18 @@ fun AlarmToggleCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 18.dp),
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Bell icon placeholder — replace with your icon resource
-            Surface(
-                modifier = Modifier.size(44.dp),
-                shape = RoundedCornerShape(12.dp),
-                color = if (isEnabled) GreenDark else Color(0xFF1A1A1A)
+            // Icon container
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (isEnabled) Surface else Color(0xFF1A1A1A)),
+                contentAlignment = Alignment.Center
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "🔔",
-                        fontSize = 20.sp
-                    )
-                }
+                Text("🔔", fontSize = 20.sp)
             }
 
             Spacer(Modifier.width(14.dp))
@@ -69,26 +68,25 @@ fun AlarmToggleCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    style = BatteryTypography.titleLarge.copy(
-                        color = if (isEnabled) TextPrimary else TextSecondary
-                    )
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isEnabled) TextPrimary else TextSecondary
                 )
-                Spacer(Modifier.height(4.dp))
                 Text(
                     text = subtitle,
-                    style = BatteryTypography.bodyMedium
+                    fontSize = 12.sp,
+                    color = TextMuted
                 )
             }
 
-            // Toggle — stops click propagation to card
             Switch(
                 checked = isEnabled,
                 onCheckedChange = { onToggle(it) },
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = TextPrimary,
-                    checkedTrackColor = GreenPrimary,
+                    checkedThumbColor = Black,
+                    checkedTrackColor = GreenPrimary, // Radioactive Lime for that "neon" pop
                     uncheckedThumbColor = TextMuted,
-                    uncheckedTrackColor = Color(0xFF333333)
+                    uncheckedTrackColor = Color(0xFF2D3748)
                 )
             )
         }

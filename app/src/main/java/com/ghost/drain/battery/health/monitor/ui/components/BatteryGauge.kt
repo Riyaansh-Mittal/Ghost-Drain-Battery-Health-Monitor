@@ -13,7 +13,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -23,13 +22,14 @@ import com.ghost.drain.battery.health.monitor.ui.theme.*
 fun BatteryGauge(
     percent: Int,
     temperatureCelsius: Float = 25f,
+    isCharging: Boolean = false,
     modifier: Modifier = Modifier,
     size: Dp = 200.dp,
     strokeWidth: Dp = 14.dp,
     animateChanges: Boolean = true
 ) {
     val isOverheat = temperatureCelsius > 42f
-    val arcColor = gaugeColor(percent)
+    val arcColor = getVibrantGaugeColor(percent, isCharging)
 
     val targetSweep = (percent.coerceIn(0, 100) / 100f) * 270f
     val animatedSweep by animateFloatAsState(
@@ -63,9 +63,9 @@ fun BatteryGauge(
             val topLeft = Offset(padding, padding)
             val startAngle = 135f
 
-            // Track
+            // Track (Using a slightly lighter grey for depth)
             drawArc(
-                color      = GaugeTrack,
+                color      = Color(0xFF1E252B),
                 startAngle = startAngle,
                 sweepAngle = 270f,
                 useCenter  = false,
@@ -106,25 +106,23 @@ fun BatteryGauge(
             }
         }
 
-        // ── Center text — number + % inline, then label ──────────────────────
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Number and % sign on the same baseline
             Row(
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.Center
             ) {
                 Text(
                     text  = "$percent",
-                    color = arcColor,                 // number matches arc color
+                    color = TextPrimary, // Keep number white for high contrast
                     fontWeight = FontWeight.Bold,
-                    fontSize   = (size.value * 0.28f).sp  // scales with gauge size
+                    fontSize   = (size.value * 0.28f).sp
                 )
                 Text(
                     text  = "%",
-                    color = arcColor.copy(alpha = 0.75f),
+                    color = arcColor, // Only the % sign matches the color
                     fontWeight = FontWeight.SemiBold,
                     fontSize   = (size.value * 0.13f).sp,
                     modifier   = Modifier.padding(bottom = (size.value * 0.04f).dp)
@@ -141,28 +139,10 @@ fun BatteryGauge(
     }
 }
 
-private fun gaugeColor(percent: Int): Color = when {
-    percent < 10  -> GaugeRed
-    percent < 15  -> GaugeAmber
-    percent <= 80 -> GaugeGreen
-    percent <= 95 -> GaugeAmber
-    else          -> GaugeRed
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFF000000)
-@Composable
-private fun BatteryGaugePreview() {
-    BatteryHealthMonitorTheme {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(24.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            BatteryGauge(percent = 68, temperatureCelsius = 31f, size = 140.dp)
-            BatteryGauge(percent = 82, temperatureCelsius = 38f, size = 140.dp)
-            BatteryGauge(percent = 8,  temperatureCelsius = 44f, size = 140.dp)
-        }
-    }
+// Updated mapping to use the vibrant neon palette
+private fun getVibrantGaugeColor(percent: Int, isCharging: Boolean): Color = when {
+    isCharging -> GreenPrimary // Force GreenPrimary when charging
+    percent < 10 -> RedPrimary
+    percent < 15 -> AmberPrimary
+    else -> GreenPrimary
 }

@@ -26,7 +26,7 @@ data class BatteryState(
     // Health (raw from BatteryManager — unreliable, used only as fallback)
     val systemHealthPercent: Int = 0,            // BATTERY_HEALTH_* constant mapped to %
 
-    // Charger quality
+    // Charger speed classification
     val chargerVerdict: ChargerVerdict = ChargerVerdict.UNKNOWN,
 
     // Ghost drain
@@ -39,11 +39,19 @@ data class BatteryState(
     val timestampMs: Long = 0L
 )
 
+/**
+ * Charging SPEED classification only. Deliberately does NOT attempt to detect
+ * counterfeit/fake chargers — that requires kHz-range voltage ripple measurement
+ * (oscilloscope/multimeter territory), which is physically invisible to software
+ * polling a fuel-gauge IC every few seconds. AccuBattery and BatteryGuru, the
+ * reference apps this is matched against, don't make that claim either — they
+ * only classify speed. A false "counterfeit" verdict on a genuine charger is
+ * worse for user trust than not making the claim at all.
+ */
 enum class ChargerVerdict {
     UNKNOWN,
     SLOW,       // < 5W
     STANDARD,   // 5–14W
     FAST,       // 15–29W
-    SUPER_FAST, // 30W+
-    COUNTERFEIT // mA std-dev > 200mA over 60 consecutive seconds
+    SUPER_FAST  // 30W+
 }

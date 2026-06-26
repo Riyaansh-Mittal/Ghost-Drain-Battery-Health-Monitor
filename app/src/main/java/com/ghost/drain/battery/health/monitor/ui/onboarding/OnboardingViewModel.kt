@@ -27,9 +27,11 @@ class OnboardingViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Saves selection and signals completion. Call this on "Get started" tap. */
-    fun confirmSelection(onDone: () -> Unit) {
-        val identity = _uiState.value.selectedIdentity ?: return
-        _uiState.value = _uiState.value.copy(isCompleting = true)
+    fun confirmSelection(identity: UserIdentity, onDone: () -> Unit) {
+        _uiState.value = _uiState.value.copy(
+            selectedIdentity = identity,
+            isCompleting = true
+        )
         viewModelScope.launch {
             prefs.completeOnboarding(identity.key)
             onDone()

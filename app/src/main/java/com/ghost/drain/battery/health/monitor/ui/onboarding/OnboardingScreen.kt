@@ -15,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -23,7 +22,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.coerceAtLeast
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -33,7 +31,10 @@ import com.ghost.drain.battery.health.monitor.data.UserIdentity
 import com.ghost.drain.battery.health.monitor.ui.theme.*
 
 // ── Per-identity design tokens ────────────────────────────────────────────────
-
+// These identity accent colors are intentionally local to onboarding —
+// they are visual differentiators for the selector UI only and are not
+// part of the app's semantic color system. The home screen uses GreenPrimary
+// from Color.kt, not these onboarding-specific shades.
 private data class IdentityStyle(
     val iconRes: Int,
     val accentColor: Color
@@ -67,11 +68,10 @@ fun OnboardingScreen(
     viewModel: OnboardingViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    
+
     OnboardingContent(
         onSelectIdentity = { identity ->
-            viewModel.selectIdentity(identity)
-            viewModel.confirmSelection(onComplete)
+            viewModel.confirmSelection(identity, onComplete)
         }
     )
 }
@@ -82,15 +82,16 @@ fun OnboardingScreen(
 private fun OnboardingContent(
     onSelectIdentity: (UserIdentity) -> Unit
 ) {
-    val configuration = LocalConfiguration.current
-    val screenHeight = configuration.screenHeightDp.dp
     val backgroundColor = Color(0xFF090B0F) // Deep space dark background
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(backgroundColor)
     ) {
+        // We capture the exact available screen height here
+        val minScreenHeight = maxHeight
+
         // ── Ambient background glow — stays pinned to top ──────────────────────
         Box(
             modifier = Modifier
@@ -108,115 +109,126 @@ private fun OnboardingContent(
                 )
         )
 
-        // ── Main UI Layout (Scrolls ONLY if screen/text is too big) ───────────
+        // ── Scrollable Wrapper ─────────────────────────────────────────────────
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            
-            // Reduced top space to shift everything upward
-            Spacer(modifier = Modifier.height((screenHeight * 0.04f).coerceAtLeast(16.dp)))
-
-            // ── Header icon with strong glow ──────────────────────────────────
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .background(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFF4CAF50).copy(alpha = 0.4f),
-                                Color.Transparent
-                            )
-                        ),
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_battery), // Assuming this is your outline battery icon
-                    contentDescription = null,
-                    tint = Color(0xFF4ADE80),
-                    modifier = Modifier.size(42.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // ── Titles ────────────────────────────────────────────────────────
-            Text(
-                text = "What matters most\nto you right now?",
-                fontWeight = FontWeight.Bold,
-                fontSize = 32.sp,
-                lineHeight = 38.sp,
-                textAlign = TextAlign.Center,
-                color = Color.White
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = "We'll personalize your experience\nto match your goal.",
-                fontSize = 16.sp,
-                lineHeight = 24.sp,
-                textAlign = TextAlign.Center,
-                color = Color(0xFF9CA3AF)
-            )
-
-            Spacer(modifier = Modifier.height(36.dp))
-
-            // ── Identity cards ────────────────────────────────────────────────
+            // ── Main UI Layout ─────────────────────────────────────────────────
+            // By setting minimum height to the exact screen height, we can safely
+            // use .weight() inside. If content fits, weight stretches perfectly
+            // (0 scroll). If content overflows, it unlocks scrolling.
             Column(
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = minScreenHeight)
+                    .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                UserIdentity.entries.forEach { identity ->
-                    IdentityCard(
-                        identity = identity,
-                        onSelect = { onSelectIdentity(identity) }
-                    )
-                }
-            }
 
-            // Expanded space to push the pill downward (ensures it looks like a single frame)
-            Spacer(modifier = Modifier.height((screenHeight * 0.035f).coerceAtLeast(30.dp)))
+                // Using heightIn ensures that if the screen shrinks and weights collapse,
+                // the elements won't squish against each other completely.
+                Spacer(modifier = Modifier.heightIn(min = 24.dp).weight(0.15f))
 
-            // ── Bottom Pill ───────────────────────────────────────────────────
-            Surface(
-                shape = RoundedCornerShape(percent = 50),
-                color = Color(0xFF14171C),
-                border = BorderStroke(1.dp, Color(0xFF22262E))
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+                // ── Header icon with strong glow ───────────────────────────────
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0xFF4CAF50).copy(alpha = 0.4f),
+                                    Color.Transparent
+                                )
+                            ),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.ic_reload), // Assuming you have a reload/refresh icon
+                        painter = painterResource(R.drawable.ic_battery), // Assuming this is your outline battery icon
                         contentDescription = null,
-                        tint = Color(0xFF9CA3AF),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = buildAnnotatedString {
-                            append("You can change this anytime in ")
-                            withStyle(SpanStyle(color = Color(0xFF4ADE80))) {
-                                append("Settings")
-                            }
-                            append(".")
-                        },
-                        fontSize = 13.sp,
-                        color = Color(0xFF9CA3AF)
+                        tint = Color(0xFF4ADE80),
+                        modifier = Modifier.size(42.dp)
                     )
                 }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // ── Titles ─────────────────────────────────────────────────────
+                Text(
+                    text = "What matters most\nto you right now?",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 32.sp,
+                    lineHeight = 38.sp,
+                    textAlign = TextAlign.Center,
+                    color = Color.White
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "We'll personalize your experience\nto match your goal.",
+                    fontSize = 16.sp,
+                    lineHeight = 24.sp,
+                    textAlign = TextAlign.Center,
+                    color = Color(0xFF9CA3AF)
+                )
+
+                Spacer(modifier = Modifier.heightIn(min = 32.dp).weight(0.6f))
+
+                // ── Identity cards ─────────────────────────────────────────────
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    UserIdentity.entries.forEach { identity ->
+                        IdentityCard(
+                            identity = identity,
+                            onSelect = { onSelectIdentity(identity) }
+                        )
+                    }
+                }
+
+                // Expanded space to push the pill downward
+                Spacer(modifier = Modifier.heightIn(min = 32.dp).weight(1.2f))
+
+                // ── Bottom Pill ────────────────────────────────────────────────
+                Surface(
+                    shape = RoundedCornerShape(percent = 50),
+                    color = Color(0xFF14171C),
+                    border = BorderStroke(1.dp, Color(0xFF22262E))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_reload), // Assuming you have a reload/refresh icon
+                            contentDescription = null,
+                            tint = Color(0xFF9CA3AF),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = buildAnnotatedString {
+                                append("You can change this anytime in ")
+                                withStyle(SpanStyle(color = Color(0xFF4ADE80))) {
+                                    append("Settings")
+                                }
+                                append(".")
+                            },
+                            fontSize = 13.sp,
+                            color = Color(0xFF9CA3AF)
+                        )
+                    }
+                }
+
+                // Bottom margin
+                Spacer(modifier = Modifier.heightIn(min = 24.dp).weight(0.2f))
             }
-            
-            // Bottom margin to prevent it from hugging the absolute edge when scrolled
-            Spacer(modifier = Modifier.height((screenHeight * 0.04f).coerceAtLeast(24.dp)))
         }
     }
 }
@@ -229,7 +241,7 @@ private fun IdentityCard(
     onSelect: () -> Unit
 ) {
     val style = identityStyle(identity)
-    
+
     // Subtle background gradient that fades out from the left
     val cardBackgroundBrush = Brush.horizontalGradient(
         colors = listOf(
