@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="10dp">
+    
+    <TextView
+        android:id="@+id/notif_header_alert"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.04"
+        android:text="ALERT BANNER" />
+        
+    <TextView
+        android:id="@+id/notif_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:textColor="?android:attr/textColorPrimary"
+        android:layout_marginTop="2dp"
+        android:letterSpacing="0.01"
+        android:text="Main Title Header" />
+        
+    <TextView
+        android:id="@+id/notif_body"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="14sp"
+        android:textColor="?android:attr/textColorPrimary"
+        android:layout_marginTop="8dp"
+        android:lineSpacingMultiplier="1.2"
+        android:text="Detailed description sentences go here." />
+</LinearLayout>

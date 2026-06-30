@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import java.text.SimpleDateFormat
 import java.util.*
+import android.widget.RemoteViews
 
 class BatteryMonitorService : Service() {
 
@@ -81,6 +82,11 @@ class BatteryMonitorService : Service() {
     private var highAlarmBurstCount      = 0
     private var lowAlarmBurstCount       = 0
     private var overheatAlarmBurstCount  = 0
+
+    private var highAlarmSnoozedForSession     = false
+    private var overheatAlarmSnoozedForSession = false
+    private var lowAlarmSnoozedAtPercent: Int? = null
+    private var lowAlarmSnoozedAtTime: Long    = 0L
 
     private val powerSaveReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -166,51 +172,62 @@ class BatteryMonitorService : Service() {
         else          -> AlarmSeverity("🟡", "#FFB800", "Charge soon")
     }
 
-    private suspend fun checkAndNotifyOptimizationStatus() {
-        val anyAlarmEnabled = alarmPrefs.highAlarmEnabled.first() ||
-                alarmPrefs.lowAlarmEnabled.first()  ||
-                alarmPrefs.overheatEnabled.first()
-        if (!anyAlarmEnabled) return
-
-        val exemptedNow = OemBatteryOptimizationHelper.isExempted(this)
+    private fun checkAndNotifyOptimizationStatus() {
+        val pm = getSystemService(POWER_SERVICE) as PowerManager
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        val exemptedNow = OemBatteryOptimizationHelper.isExempted(this)
 
-        if (!exemptedNow && !oemWarningVisible && !oemWarningSentThisSession) {
+        if (exemptedNow) {
+            if (oemWarningVisible) {
+                nm.cancel(NOTIF_ID_OEM_WARNING)
+                oemWarningVisible = false
+            }
+            return
+        }
+
+        if (!oemWarningVisible && !oemWarningSentThisSession) {
             val openAppPi = PendingIntent.getActivity(
                 this, 0,
                 buildOpenAlarmScreenIntent(this),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
+
+            val oemColorString = "#EA580C" // Visible safety Orange
+            val colorInt = android.graphics.Color.parseColor(oemColorString)
+
+            val collapsedView = RemoteViews(packageName, R.layout.notif_alarm).apply {
+                setTextViewText(R.id.notif_title, "⚠️ ALERTS WON'T WORK")
+                setTextViewText(R.id.notif_body, "System optimization is blocking protection. Tap to fix.")
+                setTextColor(R.id.notif_title, colorInt)
+            }
+
+            val expandedView = RemoteViews(packageName, R.layout.notif_alarm_expanded).apply {
+                setTextViewText(R.id.notif_header_alert, "⚠️ ALERTS WON'T WORK")
+                setTextViewText(R.id.notif_title, "Permission Problem")
+                setTextViewText(R.id.notif_body, "Android is aggressively optimizing background services. Without explicit exemption, Ghost Drain cannot wake your phone to fire safety alerts or 80% unplug reminders.\n\nTap 'Fix Now' to grant unrestricted background execution.")
+                setTextColor(R.id.notif_header_alert, colorInt)
+            }
+
             val notif = NotificationCompat.Builder(this, CHANNEL_OEM_WARNING)
                 .setSmallIcon(R.drawable.ic_battery_notification)
-                .setLargeIcon(
-                    android.graphics.BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
-                )
-                .setContentTitle("⚠️ Battery Warnings Disabled")
-                .setContentText("Low battery alerts won't appear • Tap to fix")
-                .setStyle(
-                    NotificationCompat.BigTextStyle()
-                        .setBigContentTitle("⚠️ Battery Warnings Disabled")
-                        .bigText("Low battery alerts won't appear\nTap Fix Now — takes 1 tap in the system dialog")
-                )
-                .setColor(android.graphics.Color.parseColor("#FF9500"))
+                .setLargeIcon(android.graphics.BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher))
+                .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+                .setCustomContentView(collapsedView)
+                .setCustomBigContentView(expandedView)
+                .setColor(colorInt)
                 .setColorized(true)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_STATUS)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .setFullScreenIntent(openAppPi, false)
                 .setContentIntent(openAppPi)
                 .addAction(0, "🔧 Fix Now", openAppPi)
                 .setAutoCancel(true)
                 .setOngoing(false)
                 .build()
+
             nm.notify(NOTIF_ID_OEM_WARNING, notif)
             oemWarningVisible         = true
             oemWarningSentThisSession = true
-        } else if (exemptedNow && oemWarningVisible) {
-            nm.cancel(NOTIF_ID_OEM_WARNING)
-            oemWarningVisible         = false
-            oemWarningSentThisSession = false
         }
     }
 
@@ -220,12 +237,16 @@ class BatteryMonitorService : Service() {
         if (state.isCharging && !wasChargingLastTick) {
             sessionStartTime    = System.currentTimeMillis()
             sessionStartPercent = state.percent
+            highAlarmSnoozedForSession     = false
+            overheatAlarmSnoozedForSession = false
             Log.d(TAG, "Charging session started at ${state.percent}%")
         }
 
         if (!state.isCharging && wasChargingLastTick && sessionStartTime != null) {
             val unplugPercent = state.percent
             val today         = DATE_FMT.format(Date())
+            lowAlarmSnoozedAtPercent = null
+            lowAlarmSnoozedAtTime    = 0L 
             Log.d(TAG, "Charging session ended at $unplugPercent%")
             sessionStartTime = null
 
@@ -350,11 +371,11 @@ class BatteryMonitorService : Service() {
         val today       = DATE_FMT.format(Date(now))
 
         // ── High alarm ────────────────────────────────────────────────────────
-        val highCondition = highEnabled && state.isCharging && state.percent >= highPct
-        if (!highCondition) {
-            highAlarmLastFiredAt = 0L
-            highAlarmBurstCount  = 0
-        } else if ((now - highAlarmLastFiredAt) >= BURST_INTERVAL_MS &&
+        val highCondition = highEnabled && state.isCharging && state.percent >= highPct &&
+            !highAlarmSnoozedForSession
+
+        if (highCondition &&
+            (now - highAlarmLastFiredAt) >= BURST_INTERVAL_MS &&
             highAlarmBurstCount < BURST_REPEAT_MAX) {
             fireAlarm(
                 title         = "🔴 ${state.percent}% — Unplug Now",
@@ -369,25 +390,32 @@ class BatteryMonitorService : Service() {
         }
 
         // ── Low alarm ─────────────────────────────────────────────────────────
-        val lowCondition = lowEnabled && !state.isCharging && state.percent <= lowPct
+        val lowSnoozePassed = if (lowAlarmSnoozedAtPercent != null) {
+            val percentDropped = (lowAlarmSnoozedAtPercent!! - state.percent) >= 3
+            val timePassed     = (now - lowAlarmSnoozedAtTime) >= 15 * 60 * 1000L
+            percentDropped || timePassed
+        } else true
+
+        val lowCondition = lowEnabled && !state.isCharging && state.percent <= lowPct &&
+            lowSnoozePassed
+
         if (state.isCharging) {
             lowAlarmLastFiredAt = 0L
             lowAlarmBurstCount  = 0
-        } else if (lowCondition && (now - lowAlarmLastFiredAt) >= BURST_INTERVAL_MS &&
+        } else if (lowCondition &&
+            (now - lowAlarmLastFiredAt) >= BURST_INTERVAL_MS &&
             lowAlarmBurstCount < BURST_REPEAT_MAX) {
             val mins = state.minutesToEmpty
             val sev  = severityFor(state.percent)
             val timeText = if (mins != null && mins > 0) {
-                val h = mins / 60
-                val m = mins % 60
+                val h = mins / 60; val m = mins % 60
                 if (h > 0) "~${h}h ${m}m left" else "~${m} min left"
             } else "Low battery"
-
             fireAlarm(
-                title       = "${sev.emoji} ${state.percent}% Battery Remaining",
-                body        = "$timeText • ${sev.urgency}",
-                rawResId    = R.raw.alarm_low,
-                minutesLeft = mins,
+                title         = "${sev.emoji} ${state.percent}% Battery Remaining",
+                body          = "$timeText • ${sev.urgency}",
+                rawResId      = R.raw.alarm_low,
+                minutesLeft   = mins,
                 severityColor = sev.color
             )
             lowAlarmLastFiredAt = now
@@ -396,11 +424,11 @@ class BatteryMonitorService : Service() {
         }
 
         // ── Overheat alarm ────────────────────────────────────────────────────
-        val heatCondition = heatEnabled && state.temperatureCelsius >= heatThresh
-        if (!heatCondition) {
-            overheatAlarmLastFiredAt = 0L
-            overheatAlarmBurstCount  = 0
-        } else if ((now - overheatAlarmLastFiredAt) >= BURST_INTERVAL_MS &&
+        val heatCondition = heatEnabled && state.temperatureCelsius >= heatThresh &&
+            !overheatAlarmSnoozedForSession
+
+        if (heatCondition &&
+            (now - overheatAlarmLastFiredAt) >= BURST_INTERVAL_MS &&
             overheatAlarmBurstCount < BURST_REPEAT_MAX) {
             fireAlarm(
                 title         = "🔴 ${"%.0f".format(state.temperatureCelsius)}°C — Overheating",
@@ -520,54 +548,92 @@ class BatteryMonitorService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Derive the action verb and detail line from the existing title/body
-        // so dynamic severity (emoji, percent, time left) is fully preserved.
-        // title examples: "🔴 23% Battery Remaining" / "🔴 80% — Unplug Now" / "🔴 42°C — Overheating"
-        val isHighAlarm   = title.contains("Unplug Now", ignoreCase = true)
-        val isOverheat    = title.contains("Overheating", ignoreCase = true)
+        // Parse system metrics dynamically
+        val isHighAlarm = title.contains("Unplug Now", ignoreCase = true) || title.contains("80%", ignoreCase = true)
+        val isOverheat  = title.contains("Overheating", ignoreCase = true) || title.contains("Hot", ignoreCase = true)
+        val isLowAlarm   = title.contains("Low", ignoreCase = true) || title.contains("Battery Remaining", ignoreCase = true) || title.contains("%", ignoreCase = true)
 
-        val collapsedLine1 = when {
-            isHighAlarm -> "UNPLUG NOW"
-            isOverheat  -> "OVERHEATING"
-            else        -> "LOW BATTERY"
+        val collapsedTitleText: String
+        val collapsedBodyText: String
+
+        val expandedHeaderAlertText: String
+        val expandedTitleText: String
+        val expandedBodyText: String
+        val finalColorString: String
+
+        when {
+            isHighAlarm -> {
+                collapsedTitleText = "🟢 UNPLUG NOW"
+                collapsedBodyText  = "Battery reached healthy 80% limit."
+
+                expandedHeaderAlertText = "🟢 CHARGE LIMIT REACHED"
+                expandedTitleText  = "Unplug the Charger"
+                expandedBodyText   = "Your device has reached 80%.\n\nKeeping your battery level near or below 80% significantly avoids thermal stress and extends your hardware lifecycle."
+                finalColorString   = "#22C55E" // Mid Emerald Green
+            }
+            isOverheat -> {
+                collapsedTitleText = "🔥 TEMPERATURE CRITICAL"
+                collapsedBodyText  = "Battery is running hot! Unplug now."
+
+                expandedHeaderAlertText = "🔥 THERMAL ALERT"
+                expandedTitleText  = "Cool Down Hardware"
+                expandedBodyText   = "Excessive high temperatures accelerate irreversible battery degradation.\n\nPlease stop heavy apps, unplug the charger, and allow the device to cool off."
+                finalColorString   = "#EF4444" // Deep warning Red
+            }
+            isLowAlarm -> {
+                // Safely scrub original title to preserve exact runtime level numbers
+                val currentPct = title.substringBefore("%").replace(Regex("[^0-9]"), "").trim().ifEmpty { "20" }
+
+                collapsedTitleText = "🔋 $currentPct% Battery Remaining"
+                collapsedBodyText  = "Connect your charger soon."
+
+                expandedHeaderAlertText = "⚠️ LOW ENERGY LEVEL"
+                expandedTitleText  = "Plug in Charger"
+                expandedBodyText   = "Your phone has dropped to $currentPct%.\n\nDeep discharging below 15% stresses chemical cell bounds. Connect to power soon to keep your device running smoothly without interruption."
+                finalColorString = "#F59E0B" // High Contrast Amber Yellow
+            }
+            else -> {
+                collapsedTitleText = title
+                collapsedBodyText  = body
+                expandedHeaderAlertText = "⚠️ SYSTEM NOTICE"
+                expandedTitleText  = title
+                expandedBodyText   = body
+                finalColorString   = severityColor
+            }
         }
-        // Extract the leading emoji + percent/temp from the original title for line 2
-        // e.g. "🔴 80% — Unplug Now" → "🔴 80% — Unplug Now" stripped to "🔴 Battery reached 80%"
-        val collapsedLine2 = body   // body already has "Battery health drops above X%" or time remaining
 
-        val expandedText = when {
-            isHighAlarm -> "$body\n\nUnplugging near this level reduces long-term battery wear."
-            isOverheat  -> "$body\n\nHigh temperature accelerates battery degradation. Unplug and let it cool."
-            else        -> "$body\n\nPlug in soon to keep your device running."
+        val colorInt = android.graphics.Color.parseColor(finalColorString)
+
+        val collapsedView = RemoteViews(packageName, R.layout.notif_alarm).apply {
+            setTextViewText(R.id.notif_title, collapsedTitleText)
+            setTextViewText(R.id.notif_body, collapsedBodyText)
+            setTextColor(R.id.notif_title, colorInt)
+        }
+
+        val expandedView = RemoteViews(packageName, R.layout.notif_alarm_expanded).apply {
+            setTextViewText(R.id.notif_header_alert, expandedHeaderAlertText)
+            setTextViewText(R.id.notif_title, expandedTitleText)
+            setTextViewText(R.id.notif_body, expandedBodyText)
+            setTextColor(R.id.notif_header_alert, colorInt)
         }
 
         val notif = NotificationCompat.Builder(this, CHANNEL_ALARM)
             .setSmallIcon(R.drawable.ic_battery_notification)
-            .setLargeIcon(
-                android.graphics.BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
-            )
-            // Collapsed: two-line hero — line 1 is the action, line 2 is the detail
-            .setContentTitle(collapsedLine1)
-            .setContentText(collapsedLine2)
-            // Expanded: full context
-            .setStyle(
-                NotificationCompat.BigTextStyle()
-                    .setBigContentTitle(title)   // original title with emoji + value
-                    .bigText(expandedText)
-            )
-            .setColor(android.graphics.Color.parseColor(severityColor))
+            .setLargeIcon(android.graphics.BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher))
+            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+            .setCustomContentView(collapsedView)
+            .setCustomBigContentView(expandedView)
+            .setColor(colorInt)
             .setColorized(true)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setFullScreenIntent(openHomePi, true)
-            .setContentIntent(stopPi)
+            .setContentIntent(openHomePi)
             .setDeleteIntent(stopPi)
             .addAction(0, "⛔ Stop", stopPi)
             .addAction(0, "🔋 Open App", openHomePi)
             .setAutoCancel(false)
             .setOngoing(true)
-            .setTimeoutAfter(0)
             .build()
 
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
@@ -578,9 +644,16 @@ class BatteryMonitorService : Service() {
         repeatJob?.cancel()
         repeatJob = null
         releaseMediaPlayer()
+
+        highAlarmSnoozedForSession     = true
+        overheatAlarmSnoozedForSession = true
+
+        lowAlarmSnoozedAtPercent = repository.batteryState.value.percent
+        lowAlarmSnoozedAtTime    = System.currentTimeMillis()
+
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
             .cancel(NOTIF_ID_ALARM)
-        Log.d(TAG, "Alarm stopped and notification cancelled")
+        Log.d(TAG, "Alarm stopped and muted contextually by user")
     }
 
     private fun stopAudioOnly() {
