@@ -86,6 +86,12 @@ private fun HomeContent(
                     tint = TextPrimary
                 )
                 Icon(
+                    painter = painterResource(R.drawable.ic_bell),
+                    contentDescription = "Notifications",
+                    tint = TextPrimary,
+                    modifier = Modifier.size(24.dp)
+                )
+                Icon(
                     imageVector = Icons.Rounded.Settings,
                     contentDescription = "Settings",
                     tint = TextPrimary
@@ -351,12 +357,17 @@ private fun ChargerCard(
                 }
             }
             if (colorLevel == ChargerLevel.NORMAL) {
-                // Fixed green tick background shape
+                // Updated: Using ic_circle_check instead of manual text
                 Box(
-                    modifier = Modifier.size(16.dp).background(GreenPrimary, CircleShape),
+                    modifier = Modifier.size(20.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("✓", color = Black, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Icon(
+                        painter = painterResource(R.drawable.ic_check_circle),
+                        contentDescription = "Status OK",
+                        tint = GreenPrimary,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
             }
         }

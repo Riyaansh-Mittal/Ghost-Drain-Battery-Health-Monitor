@@ -11,18 +11,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource // Added import
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ghost.drain.battery.health.monitor.R // Ensure this import points to your R file
 import com.ghost.drain.battery.health.monitor.ui.theme.*
 
-/**
- * The big alarm hero card on Screen 1 Home Dashboard.
- *
- * Tapping the card body navigates to Alarm screen.
- * Tapping the toggle switches alarm on/off without navigating.
- */
 @Composable
 fun AlarmToggleCard(
     title: String,
@@ -32,8 +28,7 @@ fun AlarmToggleCard(
     onCardClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // New logic: Use vibrant neon colors when enabled
-    val borderColor = if (isEnabled) GreenPrimary else Color(0xFF1F2937) // Modern dark grey
+    val borderColor = if (isEnabled) GreenPrimary else Color(0xFF1F2937)
     val backgroundColor = if (isEnabled) SurfaceCard else Color(0xFF0D0F12)
 
     Card(
@@ -52,7 +47,7 @@ fun AlarmToggleCard(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Icon container
+            // Updated: Icon container using ic_bell
             Box(
                 modifier = Modifier
                     .size(44.dp)
@@ -60,7 +55,12 @@ fun AlarmToggleCard(
                     .background(if (isEnabled) Surface else Color(0xFF1A1A1A)),
                 contentAlignment = Alignment.Center
             ) {
-                Text("🔔", fontSize = 20.sp)
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_bell),
+                    contentDescription = "Alarm Bell",
+                    tint = if (isEnabled) GreenPrimary else TextMuted,
+                    modifier = Modifier.size(24.dp)
+                )
             }
 
             Spacer(Modifier.width(14.dp))
@@ -84,43 +84,10 @@ fun AlarmToggleCard(
                 onCheckedChange = { onToggle(it) },
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = Black,
-                    checkedTrackColor = GreenPrimary, // Radioactive Lime for that "neon" pop
+                    checkedTrackColor = GreenPrimary,
                     uncheckedThumbColor = TextMuted,
                     uncheckedTrackColor = Color(0xFF2D3748)
                 )
-            )
-        }
-    }
-}
-
-// ── Preview ───────────────────────────────────────────────────────────────────
-
-@Preview(showBackground = true, backgroundColor = 0xFF000000)
-@Composable
-private fun AlarmToggleCardPreview() {
-    BatteryHealthMonitorTheme {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            var highEnabled by remember { mutableStateOf(true) }
-            var lowEnabled  by remember { mutableStateOf(true) }
-
-            AlarmToggleCard(
-                title     = "Unplug alarm at 80%",
-                subtitle  = "Rings every 60s until unplugged",
-                isEnabled = highEnabled,
-                onToggle  = { highEnabled = it },
-                onCardClick = {}
-            )
-            AlarmToggleCard(
-                title     = "Low battery alarm at 20%",
-                subtitle  = "Alerts before deep discharge",
-                isEnabled = lowEnabled,
-                onToggle  = { lowEnabled = it },
-                onCardClick = {}
             )
         }
     }

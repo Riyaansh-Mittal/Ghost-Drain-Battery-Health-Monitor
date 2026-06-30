@@ -6,10 +6,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ghost.drain.battery.health.monitor.data.BatteryDataSource
 import com.ghost.drain.battery.health.monitor.data.UserPreferences
+import com.ghost.drain.battery.health.monitor.data.AlarmPreferences
 import com.ghost.drain.battery.health.monitor.model.BatteryState
 import com.ghost.drain.battery.health.monitor.model.ChargerVerdict
 import com.ghost.drain.battery.health.monitor.repository.BatteryRepository
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
+
 
 data class HomeUiState(
     // ── Gauge ───────────────────────────────────────────────────────────────
@@ -73,6 +76,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo      = BatteryRepository(BatteryDataSource(app))
     private val userPrefs = UserPreferences(app)
+    private val alarmPrefs = AlarmPreferences(app)
 
     // Phone model used in charger card — read once, doesn't change at runtime.
     // Note: Android provides NO API for charger manufacturer/model. Build.MODEL
@@ -112,19 +116,35 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 _uiState.value = _uiState.value.copy(isPowerUser = key == "power_user")
             }
             .launchIn(viewModelScope)
+        
+        alarmPrefs.highAlarmEnabled
+            .onEach { enabled -> _uiState.value = _uiState.value.copy(highAlarmEnabled = enabled) }
+            .launchIn(viewModelScope)
+
+        alarmPrefs.highAlarmPercent
+            .onEach { pct -> _uiState.value = _uiState.value.copy(highAlarmPercent = pct) }
+            .launchIn(viewModelScope)
+
+        alarmPrefs.lowAlarmEnabled
+            .onEach { enabled -> _uiState.value = _uiState.value.copy(lowAlarmEnabled = enabled) }
+            .launchIn(viewModelScope)
+
+        alarmPrefs.lowAlarmPercent
+            .onEach { pct -> _uiState.value = _uiState.value.copy(lowAlarmPercent = pct) }
+            .launchIn(viewModelScope)
     }
 
+    // Replace toggle functions:
     fun toggleHighAlarm() {
-        _uiState.value = _uiState.value.copy(
-            highAlarmEnabled = !_uiState.value.highAlarmEnabled
-        )
-        // TODO Part 5: persist + update AlarmManager
+        viewModelScope.launch {
+            alarmPrefs.setHighAlarmEnabled(!_uiState.value.highAlarmEnabled)
+        }
     }
 
     fun toggleLowAlarm() {
-        _uiState.value = _uiState.value.copy(
-            lowAlarmEnabled = !_uiState.value.lowAlarmEnabled
-        )
+        viewModelScope.launch {
+            alarmPrefs.setLowAlarmEnabled(!_uiState.value.lowAlarmEnabled)
+        }
     }
 
     fun dismissGhostDrainBanner() {
